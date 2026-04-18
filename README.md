@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Token Analytics Dashboard 📊
 
-## Getting Started
+**Professional On-chain Insights for ERC-20 Tokens**
 
-First, run the development server:
+Decode the activity of any smart contract across the most popular EVM chains. Built for speed, precision, and deep research.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+![Token Analytics Dashboard Screenshot](https://raw.githubusercontent.com/placeholder/og-image.png)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🚀 Live Demo
+[https://token-analytics-dashboard.vercel.app](https://token-analytics-dashboard.vercel.app)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## ✨ Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Multi-Chain Support**: Ethereum, Arbitrum, Base, and Polygon.
+- **Real-time Transfers**: Detailed log of the last 100 transactions in the recent block window.
+- **Holder Distribution**: Derived approximation of top active holders based on net flow analysis.
+- **Volume Visualization**: 24-hour transfer volume and hourly activity trends.
+- **Wallet Integration**: Connect with RainbowKit to track your own balance and market position.
+- **Watchlist & History**: Persistent storage for your favorite tokens and recent searches.
+- **CSV Export**: Download transaction logs for offline analysis.
 
-## Learn More
+## 🛠️ Tech Stack
 
-To learn more about Next.js, take a look at the following resources:
+- **Framework**: Next.js 14 (App Router)
+- **Blockchain**: Viem & Wagmi (v2)
+- **Wallet UI**: RainbowKit
+- **Data Fetching**: TanStack Query (React Query)
+- **Styling**: Tailwind CSS & Shadcn/ui
+- **Charts**: Recharts
+- **Icons**: Lucide React
+- **Notifications**: Radix Toast
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🏛️ Architecture Notes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Why Next.js App Router?
+The App Router provides superior performance through React Server Components (where applicable) and a clean, file-based routing system that aligns perfectly with modern web standards.
 
-## Deploy on Vercel
+### Why Viem over Ethers.js?
+Viem offers a significantly smaller bundle size, better type safety, and a more modular API that fits the functional programming paradigm of modern React. Its handling of multicalls and JSON-RPC interactions is markedly more efficient.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### The "Active Holders" Approximation
+Unlike a traditional indexer (like The Graph or Goldsky) which maintains a full historical state, this dashboard calculates holder distribution on-the-fly from the last 5,000 blocks. 
+- **Pros**: Zero latency, no infrastructure costs, decentralized (queries RPC directly).
+- **Cons**: Transfer history is limited to the block window; it primarily reflects *active* market participants rather than long-term inactive whales.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛠️ Local Development
+
+1. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Setup Environment**
+   Create a `.env.local` file:
+   ```env
+   NEXT_PUBLIC_ALCHEMY_API_KEY=your_key_here
+   ```
+
+3. **Run Dev Server**
+   ```bash
+   npm run dev
+   ```
+
+## 🚢 Deployment
+
+This project is optimized for **Vercel**. Simply connect your GitHub repository and add your `NEXT_PUBLIC_ALCHEMY_API_KEY` to the environment variables.
+
+## ⚠️ Known Limitations
+
+- **Block Window**: Data is limited to the last ~5,000 blocks per search to ensure RPC stability.
+- **Derived Balances**: Holder balances are calculated from transfers in the window; starting balances outside the window are not factored in.
+- **Rate Limits**: Heavy usage depends on your Alchemy API tier.
+
+## 👨‍💻 Author
+
+**Mathias**
+- [Upwork Profile](https://www.upwork.com)
+- [Personal Website](https://example.com)
+- [GitHub](https://github.com)
+
+---
+*Built for demonstration purposes. Always verify on-chain data before making financial decisions.*
