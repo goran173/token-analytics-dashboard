@@ -71,12 +71,5 @@ This project is optimized for **Vercel**. Simply connect your GitHub repository 
 - **Derived Balances**: Holder balances are calculated from transfers in the window; starting balances outside the window are not factored in.
 - **Rate Limits**: Heavy usage depends on your Alchemy API tier.
 
-## 👨‍💻 Author
-
-**Mathias**
-- [Upwork Profile](https://www.upwork.com)
-- [Personal Website](https://example.com)
-- [GitHub](https://github.com)
-
 ---
 *Built for demonstration purposes. Always verify on-chain data before making financial decisions.*
