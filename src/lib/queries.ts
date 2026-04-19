@@ -1,15 +1,41 @@
-import { parseAbiItem, formatUnits, type Address } from 'viem';
-import { getPublicClient } from './chain';
-import { TokenMetadata, Transfer } from '@/types/token';
+import { parseAbiItem, formatUnits, type Address } from "viem";
+import { getPublicClient } from "./chain";
+import { HolderData, TokenMetadata, Transfer } from "@/types/token";
 
 const ERC20_ABI = [
-  { name: 'name', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
-  { name: 'symbol', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
-  { name: 'decimals', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
-  { name: 'totalSupply', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  {
+    name: "name",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "string" }],
+  },
+  {
+    name: "symbol",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "string" }],
+  },
+  {
+    name: "decimals",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint8" }],
+  },
+  {
+    name: "totalSupply",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
 ] as const;
 
-const TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
+const TRANSFER_EVENT = parseAbiItem(
+  "event Transfer(address indexed from, address indexed to, uint256 value)",
+);
 
 /**
  * Fetches ERC-20 token metadata using multicall for efficiency.
@@ -17,20 +43,23 @@ const TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, addres
  * @param chainId The chain ID to query
  * @returns Metadata including name, symbol, decimals, and total supply
  */
-export async function fetchTokenMetadata(address: Address, chainId: number): Promise<TokenMetadata> {
+export async function fetchTokenMetadata(
+  address: Address,
+  chainId: number,
+): Promise<TokenMetadata> {
   const client = getPublicClient(chainId);
-  
+
   try {
     const results = await client.multicall({
       contracts: [
-        { address, abi: ERC20_ABI, functionName: 'name' },
-        { address, abi: ERC20_ABI, functionName: 'symbol' },
-        { address, abi: ERC20_ABI, functionName: 'decimals' },
-        { address, abi: ERC20_ABI, functionName: 'totalSupply' },
+        { address, abi: ERC20_ABI, functionName: "name" },
+        { address, abi: ERC20_ABI, functionName: "symbol" },
+        { address, abi: ERC20_ABI, functionName: "decimals" },
+        { address, abi: ERC20_ABI, functionName: "totalSupply" },
       ],
     });
 
-    const [name, symbol, decimals, totalSupply] = results.map(r => r.result);
+    const [name, symbol, decimals, totalSupply] = results.map((r) => r.result);
 
     return {
       name: name as string,
@@ -43,8 +72,8 @@ export async function fetchTokenMetadata(address: Address, chainId: number): Pro
       contractVerified: !!name,
     };
   } catch (error) {
-    console.error('Error fetching token metadata:', error);
-    throw new Error('Failed to fetch token metadata');
+    console.error("Error fetching token metadata:", error);
+    throw new Error("Failed to fetch token metadata");
   }
 }
 
@@ -55,12 +84,21 @@ export async function fetchTokenMetadata(address: Address, chainId: number): Pro
  * @param limit Max logs to fetch
  * @returns Array of enriched transfer logs
  */
-export async function fetchRecentTransfers(address: Address, chainId: number, limit = 100): Promise<Transfer[]> {
+export async function fetchRecentTransfers(
+  address: Address,
+  chainId: number,
+  limit = 100,
+  retryWindow?: bigint
+): Promise<Transfer[]> {
   const client = getPublicClient(chainId);
-  const currentBlock = await client.getBlockNumber();
-  const fromBlock = currentBlock - 5000n; // Last ~5000 blocks
-
+  
   try {
+    const currentBlock = await client.getBlockNumber();
+    
+    // Start with 1000 for mainnet, 5000 for others, or use the retry window
+    const windowSize = retryWindow ?? (chainId === 1 ? 1000n : 5000n);
+    const fromBlock = currentBlock - windowSize;
+
     const logs = await client.getLogs({
       address,
       event: TRANSFER_EVENT,
@@ -71,13 +109,15 @@ export async function fetchRecentTransfers(address: Address, chainId: number, li
     const recentLogs = logs.slice(-limit);
 
     // Batch fetch timestamps for these blocks
-    const blockNumbers = [...new Set(recentLogs.map(l => l.blockNumber))];
+    const blockNumbers = [...new Set(recentLogs.map((l) => l.blockNumber))];
     const blockResults = await Promise.all(
-      blockNumbers.map(bn => client.getBlock({ blockNumber: bn }))
+      blockNumbers.map((bn) => client.getBlock({ blockNumber: bn })),
     );
-    const timestampMap = Object.fromEntries(blockResults.map(b => [b.number.toString(), Number(b.timestamp)]));
+    const timestampMap = Object.fromEntries(
+      blockResults.map((b) => [b.number.toString(), Number(b.timestamp)]),
+    );
 
-    return recentLogs.map(log => ({
+    return recentLogs.map((log) => ({
       from: log.args.from!,
       to: log.args.to!,
       value: log.args.value!,
@@ -85,8 +125,16 @@ export async function fetchRecentTransfers(address: Address, chainId: number, li
       txHash: log.transactionHash!,
       timestamp: timestampMap[log.blockNumber!.toString()] || 0,
     }));
-  } catch (error) {
-    console.error('Fetch transfers failed', error);
+  } catch (error: unknown) {
+    const isRangeError = (error as Error).message?.includes('range') || (error as Error).message?.includes('tier');
+    
+    // If it's a range error and we haven't already retried with the absolute minimum
+    if (isRangeError && retryWindow !== 10n) {
+      console.warn('Alchemy range limit hit. Retrying with minimal 10-block window...');
+      return fetchRecentTransfers(address, chainId, limit, 10n);
+    }
+
+    console.error("Fetch transfers failed", error);
     return [];
   }
 }
@@ -94,10 +142,13 @@ export async function fetchRecentTransfers(address: Address, chainId: number, li
 /**
  * Derives an approximation of top active holders from recent net transfers.
  */
-export function deriveActiveHolders(transfers: Transfer[], decimals: number): HolderData[] {
+export function deriveActiveHolders(
+  transfers: Transfer[],
+  decimals: number,
+): HolderData[] {
   const balances: Record<string, bigint> = {};
 
-  transfers.forEach(tx => {
+  transfers.forEach((tx) => {
     balances[tx.from] = (balances[tx.from] || 0n) - tx.value;
     balances[tx.to] = (balances[tx.to] || 0n) + tx.value;
   });
@@ -106,20 +157,24 @@ export function deriveActiveHolders(transfers: Transfer[], decimals: number): Ho
     .map(([address, balance]) => ({
       address: address as Address,
       balance: formatUnits(balance, decimals),
-      percentage: '0', // Calculated below
+      percentage: "0", // Calculated below
       rawBalance: balance,
     }))
-    .filter(h => h.rawBalance > 0n)
-    .sort((a, b) => b.rawBalance > a.rawBalance ? 1 : -1)
+    .filter((h) => h.rawBalance > 0n)
+    .sort((a, b) => (b.rawBalance > a.rawBalance ? 1 : -1))
     .slice(0, 10);
 
-  const totalObserved = activeHolders.reduce((acc, h) => acc + h.rawBalance, 0n);
+  const totalObserved = activeHolders.reduce(
+    (acc, h) => acc + h.rawBalance,
+    0n,
+  );
 
-  return activeHolders.map(h => ({
+  return activeHolders.map((h) => ({
     ...h,
-    percentage: totalObserved > 0n 
-      ? ((Number(h.rawBalance) / Number(totalObserved)) * 100).toFixed(2) 
-      : '0',
+    percentage:
+      totalObserved > 0n
+        ? ((Number(h.rawBalance) / Number(totalObserved)) * 100).toFixed(2)
+        : "0",
   }));
 }
 
@@ -134,7 +189,7 @@ export function calculate24hVolume(transfers: Transfer[], decimals: number) {
   const oneDayAgo = now - 24 * 60 * 60;
 
   const volume = transfers
-    .filter(tx => tx.timestamp >= oneDayAgo)
+    .filter((tx) => tx.timestamp >= oneDayAgo)
     .reduce((acc, tx) => acc + tx.value, 0n);
 
   return formatUnits(volume, decimals);

@@ -7,6 +7,7 @@ export interface TokenMetadata {
   totalSupply: bigint;
   address: Address;
   chainId: number;
+  contractVerified: boolean;
 }
 
 export interface Transfer {
